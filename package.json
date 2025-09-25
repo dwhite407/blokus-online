@@ -1,0 +1,22 @@
+{
+  "name": "blokus-online",
+  "version": "1.0.0",
+  "description": "Online version of the board game Blokus with real-time multiplayer",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "blokus",
+    "multiplayer",
+    "game",
+    "board-game",
+    "nodejs"
+  ],
+  "author": "Drew White",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.1.0",
+    "socket.io": "^4.8.1"
+  }
+}

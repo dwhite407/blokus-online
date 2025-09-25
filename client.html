@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Blokus Client</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<style>
+  #board {
+    display: grid;
+    grid-template-columns: repeat(14, 30px);
+    grid-template-rows: repeat(14, 30px);
+    gap: 1px;
+    margin-top: 20px;
+    place-content: center;
+  }
+
+  .hover-preview {
+    background-color: lightblue !important;
+  }
+
+  .invalid-preview {
+    background-color: rgba(255, 0, 0, 0.4) !important;
+    outline: 2px dashed red;
+  }
+  .cell {
+    width: 30px;
+    height: 30px;
+    background-color: lightgrey;
+    border: 1px solid black;
+    box-sizing: border-box;
+    transition: background-color 0.15s ease;
+  }
+  
+  .highlighted {
+    border: 2px solid yellow;
+    box-shadow: 0 0 10px yellow;
+  }
+
+    #gameInfo {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    
+    #playerList {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+    
+    .player {
+      padding: 4px 8px;
+      border-radius: 6px;
+      color: white;
+      font-weight: bold;
+    }
+    
+    .player.me {
+      background-color: blue;
+    }
+    
+    .player.opponent {
+      background-color: orange;
+    }
+
+    .piece-button.used {
+      opacity: 1;
+      pointer-events: none;
+      cursor: not-allowed;
+    }
+
+    .piece-button.used .mini-cell {
+      background-color: black !important;
+    }
+
+    #pieceSelector{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 20px auto;
+      justify-content: center;
+      align-items: flex-start;
+      max-width: 100%;
+    }
+    
+    .piece-button {
+      cursor: pointer;
+      position: relative;
+      display: inline-block;     /* allows it to size around absolute children */
+      width: auto;
+      height: auto;
+    }
+
+    .mini-cell{
+      width: 10px;
+      height: 10px;
+      border: 1px solid #ccc;
+      position: absolute;
+    }
+    #pieceContainer {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 10px;
+    }
+
+    #myPieces, #opponentPieces {
+      width: 45%;
+    }
+
+    .piece-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .opponent-piece {
+      pointer-events: none;
+    }
+
+    .opponent-piece.used {
+      opacity: 1;
+      pointer-events: none;
+      cursor: not-allowed;
+    }
+
+    .opponent-piece.used .mini-cell {
+      background-color: black !important;
+    }
+
+    .corner-circle {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: black;
+      margin: auto;
+      position: relative;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    #gameLayout {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      padding: 20px;
+    }
+
+    #selectedPiecePreview {
+      display: flex;
+      align-items: center;
+      margin: 10px 0;
+      height: 40px;
+      overflow: visible;
+      padding: 10px;
+      padding-top: 20px;
+      border-radius: 8px;
+      pointer-events: none;
+      position: relative;
+      z-index: 0;
+      pointer-events: none;
+      min-height: 60px;
+      justify-content: center;
+    }
+
+    .preview-piece {
+      position: relative;
+      margin-bottom: 10px;
+      height: 60px;
+      width: auto;
+      padding: 10px;
+      pointer-events: none;
+      z-index: 0;
+    }
+    #pieceControls {
+      position: relative;
+      z-index: 1;
+      margin: 10px 0;
+    }
+
+    .preview-cell {
+      width: 20px;
+      height: 20px;
+      position: absolute;
+      border: 1px solid #ccc;
+      pointer-events: none;
+    }
+
+    .preview-controls {
+      display: flex;
+      gap: 10px;
+    }
+    #confirmationControls {
+      position: absolute;
+      z-index: 100;
+      display: flex;
+      gap: 5px;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+    }
+    #confirmationControls .confirm {
+      background-color: green;
+      color: white;
+    }
+    #confirmationControls .cancel {
+      background-color: red;
+      color: white;
+    }
+
+
+</style>
+<body>
+  <h1></h1>
+  <div id="gameLayout">
+    <div id="gameInfo">
+      <h2 id="turnStatus">Connecting...</h2>
+      <p><strong>Players:</strong></p>
+      <ul id="playerList"></ul>
+    </div>
+    <div id="pieceControls" style="text-align: center; margin-top: 20px;">
+      <button id="rotateLeft">⟲</button>
+      <button id="rotateRight">⟳</button>
+      <button id="flipHorizontal">↔</button>
+      <button id="flipVertical">↕</button>
+    </div>
+    <div class="place-preview-container" id="selectedPiecePreview"></div>
+    
+    <div id="pieceContainer">
+        <div id="myPieces">
+          <h3>Your Pieces</h3>
+          <div class="piece-group" id="myPieceSelector"></div>
+        </div>
+        <div id="opponentPieces">
+          <h3>Opponent’s Pieces</h3>
+          <div class="piece-group" id="opponentPieceSelector"></div>
+        </div>
+      </div>
+      
+      <div id="confirmationControls" style="display: none;"></div>
+    <div id="board"></div>
+  </div>
+
+<script>
+  let playerColors = {};
+  function transformPiece(piece, rotation, flip) {
+    let newPiece = piece;
+    for (let i = 0; i < rotation; i++) {
+      newPiece = newPiece.map(([x, y]) => [-y, x]); // 90° rotation
+    }
+
+    if (flip === 'horizontal') {
+      newPiece = newPiece.map(([x, y]) => [x, -y]);
+    } else if (flip === 'vertical') {
+      newPiece = newPiece.map(([x, y]) => [-x, y]);
+    }
+
+    // Normalize to top-left corner at (0, 0)
+    const minX = Math.min(...newPiece.map(([x, _]) => x));
+    const minY = Math.min(...newPiece.map(([_, y]) => y));
+    return newPiece.map(([x, y]) => [x - minX, y - minY]);
+  }
+
+  function selectPiece(index){
+    selectedPieceIndex = index;
+    currentRotation = 0;
+    flipMode = 'none';
+    console.log(`Selected piece index: ${selectedPieceIndex}`);
+    renderSelectedPiecePreview();
+  }
+  function normalizePiece(piece) {
+    const minX = Math.min(...piece.map(([x, _]) => x));
+    const minY = Math.min(...piece.map(([_, y]) => y));
+    return piece.map(([x, y]) => [x - minX, y - minY]);
+  }
+  
+  function renderSelectedPiecePreview() {
+    const container = document.getElementById("selectedPiecePreview");
+    container.innerHTML = "";
+
+    const preview = document.createElement("div");
+    preview.classList.add("preview-piece");
+
+    let shape = transformPiece(allPieces[selectedPieceIndex], currentRotation, flipMode);
+    //const [offsetX, offsetY] = getShapeCenterOffset(shape);
+    const color = playerColors[myName] || 'gray';
+
+    shape.forEach(([dx, dy]) => {
+      const cell = document.createElement("div");
+      cell.classList.add("preview-cell");
+      cell.style.left = `${dy * 20}px`;
+      cell.style.top = `${dx * 20}px`;
+      cell.style.backgroundColor = color;
+      preview.appendChild(cell);
+    });
+
+    shape = normalizePiece(shape);
+
+    container.appendChild(preview);
+  }
+
+  function renderConfirmationButtons(baseRow, baseCol) {
+    const cell = document.getElementById(`cell-${baseRow}-${baseCol}`);
+    const confirmBox = document.getElementById("confirmationControls");
+
+    if (!cell) return;
+
+    // Position it over the cell
+    const rect = cell.getBoundingClientRect();
+    confirmBox.style.left = `${rect.left + window.scrollX}px`;
+    confirmBox.style.top = `${rect.top + window.scrollY - 60}px`; // above the cell
+    confirmBox.style.display = "flex";
+    confirmBox.innerHTML = ''; // clear existing buttons
+
+    // ✅ Button
+    const confirmBtn = document.createElement("button");
+    confirmBtn.textContent = "✅";
+    confirmBtn.classList.add("confirm");
+    confirmBtn.onclick = () => {
+      const shape = transformPiece(allPieces[selectedPieceIndex], currentRotation, flipMode);
+
+      if (!pendingPlacement) return;
+
+      const { baseRow, baseCol } = pendingPlacement;
+
+      if (usedPieces.length === 0) {
+        const [cornerRow, cornerCol] = playerCorners[myPlayerIndex];
+
+        const touchesCorner = shape.some(([dx, dy]) => {
+          const row = baseRow + dx;
+          const col = baseCol + dy;
+          return row === cornerRow && col === cornerCol;
+        });
+
+        if (!touchesCorner) {
+          alert("Your first piece must cover your starting corner!");
+          return; // Cancel move
+        }
+      }
+      socket.emit("placeMove", {
+        row: baseRow + 1,
+        col: baseCol + 1,
+        roomId: "room123",
+        pieceIndex: selectedPieceIndex,
+        rotation: currentRotation,
+        flipMode: flipMode
+      });
+
+      awaitingConfirmation = false;
+      pendingPlacement = null;
+      confirmBox.style.display = "none";
+      clearHoverPreview(); // optional cleanup
+    };
+
+    // ❌ Button
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "❌";
+    cancelBtn.classList.add("cancel");
+    cancelBtn.onclick = () => {
+      awaitingConfirmation = false;
+      pendingPlacement = null;
+      confirmBox.style.display = "none";
+      clearHoverPreview();
+    };
+
+    confirmBox.appendChild(confirmBtn);
+    confirmBox.appendChild(cancelBtn);
+  }
+
+
+  let currentRotation = 0; // 0, 1, 2, 3 (90° steps)
+  let flipMode = 'none'; // 'none', 'horizontal', 'vertical'
+  let selectedPieceIndex = 0;
+  const myName = prompt("Enter your name");
+  let opponentName = null;
+  const socket = io('http://localhost:3001');
+  let myTurn = false;
+  let usedPieces = [];
+  let hoverPreviewCells = [];
+  let lastHoveredCell = null;
+  let opponentUsedPieces = [];
+  const playerCorners = {
+    0: [4, 4],       // player index 0
+    1: [9, 9]      // player index 1
+  };
+  let awaitingConfirmation = false;
+  let pendingPlacement = null;
+
+
+    function markStartingCorners() {
+      Object.values(playerCorners).forEach(([row, col]) => {
+        const cell = document.getElementById(`cell-${row}-${col}`);
+        if (cell) {
+          const circle = document.createElement("div");
+          circle.classList.add("corner-circle");
+          cell.appendChild(circle);
+        }
+      });
+    }
+
+    function getShapeCenterOffset(shape) {
+      const xs = shape.map(([x, _]) => x);
+      const ys = shape.map(([_, y]) => y);
+      const centerX = Math.floor((Math.min(...xs) + Math.max(...xs)) / 2);
+      const centerY = Math.floor((Math.min(...ys) + Math.max(...ys)) / 2);
+      return [centerX, centerY];
+    }
+
+    function generateBoard(){
+      for(let i=0; i<14; i++){
+        for (let j=0; j<14; j++){
+          const cell = document.createElement('div');
+          cell.id = `cell-${i}-${j}`;
+
+          cell.classList.add('cell');
+          cell.classList.add('empty-cell');
+
+          cell.dataset.row = i + 1;
+          cell.dataset.col = j + 1;
+
+          document.getElementById('board').appendChild(cell);
+          
+          cell.addEventListener('mouseenter', function () {
+            if (!myTurn || usedPieces.includes(selectedPieceIndex)) return;
+
+            lastHoveredCell = this;
+            clearHoverPreview();
+
+            const row = parseInt(this.dataset.row) - 1;
+            const col = parseInt(this.dataset.col) - 1;
+            const shape = transformPiece(allPieces[selectedPieceIndex], currentRotation, flipMode);
+           // const [offsetX, offsetY] = getShapeCenterOffset(shape);
+            
+
+            shape.forEach(([dx, dy]) => {
+              const r =  row + dx;
+              const c =  col + dy; 
+
+              if (r >= 0 && r < 14 && c >= 0 && c < 14) {
+                const previewCell = document.getElementById(`cell-${r}-${c}`);
+                if (previewCell) {
+                  // Check if the cell is already colored (aka used by a player)
+                  const cellIsOccupied = !previewCell.classList.contains("empty-cell");
+
+                  if (cellIsOccupied) {
+                    previewCell.classList.add("invalid-preview");
+                  } else {
+                    previewCell.classList.add("hover-preview");
+                  }
+
+                  hoverPreviewCells.push(previewCell);
+                }
+              }
+            });
+            //shape = normalizePiece(shape);
+          });
+
+          cell.addEventListener('mouseleave', clearHoverPreview);
+
+
+          cell.addEventListener('click', function(){
+            if (!myTurn || usedPieces.includes(selectedPieceIndex)) return;
+
+            const baseRow = parseInt(this.dataset.row) - 1;
+            const baseCol = parseInt(this.dataset.col) - 1;
+
+            pendingPlacement = {baseRow, baseCol};
+            awaitingConfirmation = true;
+
+            renderConfirmationButtons(baseRow, baseCol);
+
+            // Get the shape of the piece (with rotation and flip)
+            const shape = transformPiece(allPieces[selectedPieceIndex], currentRotation, flipMode);            
+            
+          });
+        }
+      }
+      markStartingCorners();
+    };
+    generateBoard();
+
+    socket.on("updateUsedPieces", (used) => {
+        usedPieces = used;
+        renderPieceSelector(); // re-render with updated state
+    });
+
+    socket.on("opponentUsedPieces", (used) => {
+      opponentUsedPieces = used;
+      renderPieceSelector(); // update opponent display
+    });
+
+
+    socket.on("playerColors", (colors) => {
+      playerColors = colors;
+      renderPieceSelector(); // re-render with updated state
+    });
+    socket.on("yourTurn", () => {
+      myTurn = true;
+      document.getElementById("turnStatus").textContent = "Your Turn!";
+      console.log("It's your turn!");
+    });
+
+    socket.on("waitTurn", () => {
+      myTurn = false;
+      document.getElementById("turnStatus").textContent = `Waiting for ${opponentName}`;
+      console.log("Waiting for opponent...");
+    })
+
+    socket.on("updateBoard", ({ board, lastMove }) => {
+      const highlight = Array.from(document.getElementsByClassName("highlighted"));
+
+      clearHoverPreview();
+
+      for (cell of highlight){
+        cell.classList.remove("highlighted");
+      }
+      // loop through each cell and update the UI
+      for (let i = 0; i < board.length; i++){
+        if (!Array.isArray(board[i])) {
+          console.warn(`⚠️ Skipping board row ${i} because it's invalid:`, board[i]);
+          continue;
+        }
+        for (let j = 0; j < board[i].length; j++){
+          const cell = document.getElementById(`cell-${i}-${j}`);
+          
+          const value = board[i][j];
+
+          if (value == null){
+            cell.style.backgroundColor = 'lightgrey';
+            cell.classList.add("empty-cell");
+          }else{
+            cell.style.backgroundColor = playerColors[value] || 'grey';
+            cell.classList.remove("empty-cell");
+          }
+          
+          
+        }
+      }
+      for (const { row, col } of lastMove){
+        const cell = document.getElementById(`cell-${row}-${col}`);
+        if (cell){
+          cell.classList.add("highlighted");
+        }
+      }
+      console.log("New board:", board);
+    });
+    
+    let myPlayerIndex = 0;
+
+    socket.on("playerList", (players) => {
+      const list = document.getElementById("playerList");
+      list.innerHTML = "";
+
+      myPlayerIndex = players.findIndex(p => p.name === myName);
+
+      players.forEach(player => {
+        const li = document.createElement("li");
+        li.classList.add("player");
+        li.textContent = player.name;
+        li.style.backgroundColor = player.color;
+        
+        
+        if (player.name === myName) {
+          li.classList.add("me");
+        } else {
+          li.classList.add("opponent");
+          opponentName = player.name;
+        }
+        list.appendChild(li);
+      });
+      renderPieceSelector();
+      renderSelectedPiecePreview();
+    });
+
+    const allPieces = [
+      [[0,0]], //1x1 piece
+      [[0,0], [0,1]], //2x1 piece
+      [[0,0], [0,1], [0,2]], //3x1 piece
+      [[0,0], [0,1], [0,2], [0,3]], //4x1 piece
+      [[0,0], [0,1], [0,2], [0,3], [0,4]], //5x1 piece
+      [[0,0], [0,1], [1,1]], //3 square L piece
+      [[0,0], [0,1], [1,0], [1,1]], //2x2 piece
+      [[0,0], [1,0], [1,1], [1,2]], //4 square L piece
+      [[0,0], [1,0], [1,1], [2,1]], //4 square zigzag
+      [[0,0], [1,0], [1,1], [2,0]], //4 square cross
+      [[0,0], [1,0], [1,1], [1,2], [1,3]], //5 square L piece with short length
+      [[0,0], [0,1], [0,2], [1,1], [1,2]], //2x2 plus 1 at the top
+      [[0,0], [0,1], [1,1], [1,2], [2,1]], //weird piece, looks like a seven while missing a side on the cross
+      [[0,0], [0,2], [1,0], [1,1], [1,2]], //half of a square piece
+      [[0,1], [1,0], [1,1], [1,2], [2,1]], //5 square cross **might need to double check this one
+      [[0,0], [0,1], [0,2], [1,1], [2,1]], //large T
+      [[0,0], [0,1], [0,2], [1,2], [2,2]], //big L piece (half of a square)
+      [[0,0], [0,1], [0,2], [0,3], [1,1]], //half of a cross
+      [[0,0], [1,0], [1,1], [2,1], [2,2]], //large zigazag piece
+      [[0,0], [1,0], [1,1], [1,2], [2,2]], //large zigzag, kind of stretched out
+      [[0,0], [1,0], [1,1], [2,1], [3,1]] //2 ontop of 3 piece (idk how to explain it)
+    ];
+    function clearHoverPreview(){
+      hoverPreviewCells.forEach(cell => {
+        cell.classList.remove("hover-preview");
+        cell.classList.remove("invalid-preview");
+      });
+      hoverPreviewCells = [];
+    }
+    function renderPieceSelector() {
+      const mySelector = document.getElementById("myPieceSelector");
+      const opponentSelector = document.getElementById("opponentPieceSelector");
+      mySelector.innerHTML = "";
+      opponentSelector.innerHTML = "";
+
+      const groups = {
+        1: [],
+        2: [],
+        3: [],
+        4: [],
+        5: []
+      };
+
+      const myColor = playerColors[myName] || 'gray';
+      const opponentColor = playerColors[opponentName] || 'gray';
+
+
+      allPieces.forEach((piece, index) => {
+        const size = piece.length;
+        const isUsed = usedPieces.includes(index);
+
+        const normalized = transformPiece(piece, 0, 'none');
+        const [offsetX, offsetY] = getShapeCenterOffset(normalized);
+
+        // --- My Button ---
+        const myBtn = document.createElement("div");
+        myBtn.classList.add("piece-button");
+        if (isUsed) {
+          myBtn.classList.add("used");
+        } else {
+          myBtn.onclick = () => selectPiece(index);
+        }
+        normalized.forEach(([x, y]) => {
+          const cell = document.createElement("div");
+          cell.classList.add("mini-cell");
+          cell.style.left = `${(y ) * 10}px`;
+          cell.style.top = `${(x ) * 10}px`;
+          cell.style.backgroundColor = myColor;
+          myBtn.appendChild(cell);
+        });
+        const maxX = Math.max(...normalized.map(([x, _]) => x));
+        const maxY = Math.max(...normalized.map(([_, y]) => y));
+        myBtn.style.width = `${(maxY + 1) * 10 + 4}px`;
+        myBtn.style.height = `${(maxX + 1) * 10 + 4}px`;
+
+
+        // --- Opponent Button ---
+        const oppBtn = document.createElement("div");
+        oppBtn.classList.add("piece-button", "opponent-piece");
+        if (opponentUsedPieces.includes(index)) {
+          oppBtn.classList.add("used");
+        }
+        normalized.forEach(([x, y]) => {
+          const cell = document.createElement("div");
+          cell.classList.add("mini-cell");
+          cell.style.left = `${y * 10}px`;
+          cell.style.top = `${x * 10}px`;
+          cell.style.backgroundColor = opponentColor;
+          oppBtn.appendChild(cell);
+        });
+        const maxXO = Math.max(...normalized.map(([x, _]) => x));
+        const maxYO = Math.max(...normalized.map(([_, y]) => y));
+        oppBtn.style.width = `${(maxYO + 1) * 10 + 4}px`;
+        oppBtn.style.height = `${(maxXO + 1) * 10 + 4}px`;
+
+
+        groups[size].push({ myBtn, oppBtn });
+      });
+
+      for (let size = 1; size <= 5; size++) {
+        const myGroupDiv = document.createElement("div");
+        myGroupDiv.classList.add("piece-group");
+        //const myHeader = document.createElement("h4");
+        //myHeader.textContent = `${size}-block`;
+        //mySelector.appendChild(myHeader);
+        mySelector.appendChild(myGroupDiv);
+
+        const oppGroupDiv = document.createElement("div");
+        oppGroupDiv.classList.add("piece-group");
+        //const oppHeader = document.createElement("h4");
+        //oppHeader.textContent = `${size}-block`;
+        //opponentSelector.appendChild(oppHeader);
+        opponentSelector.appendChild(oppGroupDiv);
+
+        groups[size].forEach(({ myBtn, oppBtn }) => {
+          myGroupDiv.appendChild(myBtn);
+          oppGroupDiv.appendChild(oppBtn);
+        });
+      }
+    }
+
+
+    //renderPieceSelector();
+    document.addEventListener('keydown', (e) => {
+      if (!myTurn || usedPieces.includes(selectedPieceIndex)) return;
+
+      if (e.key.toLowerCase() === 'e') {
+        currentRotation = (currentRotation + 3) % 4;
+        console.log("Rotated: ", currentRotation * 90 + "°");
+      } else if ( e.key.toLowerCase() == 'q'){
+        currentRotation = (currentRotation + 1) % 4;
+        console.log("Rotated: ", currentRotation * 90 + "°");
+      }else if (e.key.toLowerCase() === 'z') {
+        flipMode = (flipMode === 'horizontal') ? 'none' : 'horizontal';
+        console.log("Flipped: Horizontal");
+      }else if (e.key.toLowerCase() == 'x'){
+        flipMode = (flipMode === 'vertical') ? 'none' : 'vertical';
+        console.log("Flipped: Vertical");
+      }else if (e.key.toLowerCase() === 'c') {
+        flipMode = 'none';
+        console.log("Flip Cleared");
+      }
+      renderSelectedPiecePreview();
+
+      // Redraw the hover preview by manually triggering mouseenter
+      clearHoverPreview();
+
+      if (lastHoveredCell) {
+        // Re-trigger mouseenter behavior manually
+        const event = new Event('mouseenter');
+        lastHoveredCell.dispatchEvent(event);
+      }
+      renderSelectedPiecePreview();
+    });
+
+  socket.on('connect', () => {
+    console.log('Connected to server with ID:', socket.id);
+
+    // Ask to join a room
+    socket.emit('joinRoom', { 
+      roomId: "room123",
+      name: myName
+     });
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Disconnected from server');
+  });
+
+  socket.on('roomJoined', (msg) => {
+    console.log(msg);
+  });
+
+  socket.on('roomFull', (msg) => {
+    console.log(msg);
+  });
+
+  socket.on("gameOver", (scores) => {
+    const message = scores
+      .map(s => `${s.name}: ${s.score} points`)
+      .join("\n");
+
+    alert("Game Over!\n" + message);
+  });
+
+  document.getElementById("rotateLeft").addEventListener("click", () => {
+    currentRotation = (currentRotation + 1) % 4;
+    renderSelectedPiecePreview();
+    clearHoverPreview();
+
+    if (lastHoveredCell) {
+      lastHoveredCell.dispatchEvent(new Event('mouseenter'));
+    }
+  });
+
+  document.getElementById("rotateRight").addEventListener("click", () => {
+    currentRotation = (currentRotation + 3) % 4;
+    renderSelectedPiecePreview();
+
+    if (lastHoveredCell) {
+      lastHoveredCell.dispatchEvent(new Event('mouseenter'));
+    }
+  });
+
+  document.getElementById("flipHorizontal").addEventListener("click", () => {
+    flipMode = (flipMode === 'horizontal') ? 'none' : 'horizontal';
+    renderSelectedPiecePreview();
+  });
+
+  document.getElementById("flipVertical").addEventListener("click", () => {
+    flipMode = (flipMode === 'vertical') ? 'none' : 'vertical';
+    renderSelectedPiecePreview();
+  });
+
+</script>
+
+</body>
+</html>
