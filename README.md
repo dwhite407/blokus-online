@@ -1,3 +1,4 @@
+```
 A modernized web version (coming soon)j of **Blokus**, featuring a React + Socket.IO frontent and a Node.js backend.
 Built for real-time, two-player gameplay...place, rotate, and flip pieces, competing for space!
 
@@ -71,5 +72,6 @@ LICENSE
 MIT - Free to use, modify, and learn from
 
 IMAGES
+```
 <img width="938" height="739" alt="image" src="https://github.com/user-attachments/assets/f4d21dcd-bd34-46b8-abbe-a0d2109dc856" />
 <img width="939" height="902" alt="image" src="https://github.com/user-attachments/assets/7a369306-7077-40e3-a24d-93db765e6f12" />
