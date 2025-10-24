@@ -64,7 +64,7 @@ FUTURE FEATURES
 -Apple GamePigeon implementation
 
 AUTHOR
-Drew White - Computer Science @ Indiana University Indianapolis
+Drew White - Computer Science @ Indiana University Indianapolis |
 Built to explore real-time web applications and interactive game design
 
 LICENSE
