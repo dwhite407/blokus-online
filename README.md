@@ -2,7 +2,7 @@
 A modernized web version (coming soon)j of **Blokus**, featuring a React + Socket.IO frontent and a Node.js backend.
 Built for real-time, two-player gameplay...place, rotate, and flip pieces, competing for space!
 ```
-[GAME RULES](./GAME_RULES.md)
+[GAME RULES](./GAME_RULES)
 ```
 QUICK START
 git clone https://github.com/dwhite407/blokus-online.git
