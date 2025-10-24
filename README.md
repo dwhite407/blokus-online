@@ -27,12 +27,14 @@ npm run dev
 
 Open the vite URL in two separate windows or tabs
 You should be able to see both players and play the game
-
+```
+```
 TECH STACK
 Frontend: React(Vite), Socket.IO, CSS |
 Backend: Node.js, Express, Socket.IO |
 Language: JavaScript
-
+```
+```
 CURRENT FEATURES
 -Real-time multiplayer
 -modern dark UI theme
@@ -41,7 +43,8 @@ CURRENT FEATURES
 -used-piece tracker per player
 -animations for recent moves
 -game over scoring by unused piece squares
-
+```
+```
 SOCKET EVENTS
 Client ---> Server:
 joinRoom({ roomID, name })
@@ -56,7 +59,8 @@ playerList([{ name, color }])
 playerColors({ name: color })
 invalidMove(message)
 gameOver(scores)
-
+```
+```
 FUTURE FEATURES
 -Lobby/names/accounts
 -Render/vercel deployment
@@ -65,14 +69,16 @@ FUTURE FEATURES
 -Fit on one screen
 -Mobile compatibility
 -Apple GamePigeon implementation
-
+```
+```
 AUTHOR
 Drew White - Computer Science @ Indiana University Indianapolis |
 Built to explore real-time web applications and interactive game design
 
 LICENSE
 MIT - Free to use, modify, and learn from
-
+```
+```
 IMAGES
 ```
 <img width="938" height="739" alt="image" src="https://github.com/user-attachments/assets/f4d21dcd-bd34-46b8-abbe-a0d2109dc856" />
