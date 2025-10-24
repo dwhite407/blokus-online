@@ -1,0 +1,63 @@
+Blokus Online — Official Game Rules
+
+This version follows the standard **Blokus** rules adapted for two-player online play.
+
+---
+
+OBJECTIVE
+Place as many of your 21 game pieces on the board as possible while blocking your opponent’s options.  
+The player with the fewest unplaced squares at the end wins.
+
+---
+
+SETUP
+- Board size: 14×14 grid (simplified from 20×20)
+- Each player has a unique color (Blue / Orange)
+- Each player’s first piece must cover their starting corner:
+  - Player 1 → (4, 4) --- Presented by a black circle
+  - Player 2 → (9, 9) --- Also presented by a black circle
+
+---
+
+GAMEPLAY
+- Players take turns placing one piece per turn.
+- Pieces **cannot** overlap or go outside the board.
+- A new piece **must touch** one of your existing pieces **by a corner only**.
+- Your own pieces **cannot touch along an edge**.
+- You **may touch** an opponent’s edge or corner freely.
+
+---
+
+ROTATION AND FLIPPING
+- Pieces can be rotated or flipped before placement:
+  - **Q / E** → rotate left/right (90°)
+  - **Z / X** → flip horizontally/vertically
+  - **C** → reset flip state
+- Once placed, the piece’s orientation is locked.
+
+---
+
+INVALID MOVES
+A placement is **invalid** if:
+- Any square overlaps an existing piece.
+- The piece extends outside the board.
+- The piece touches one of your own pieces by an edge.
+- It’s your first move but doesn’t cover your starting corner.
+
+---
+
+END OF GAME
+The game ends when **neither player can make a valid move**.  
+Scores are calculated by counting the **unused squares** in each player’s remaining pieces.  
+The **player with the lower total** (fewer unused squares) wins.
+
+---
+
+NOTES
+- This version enforces corner-touch rules server-side for fair play.
+- The full 21 Blokus pieces are implemented.
+- Planned updates: score UI, piece count, and post-game summary.
+
+---
+
+© 2025 Drew White — Built for educational and demonstration purposes.
