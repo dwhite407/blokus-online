@@ -1,5 +1,5 @@
 ```
-A modernized web version (coming soon)j of **Blokus**, featuring a React + Socket.IO frontent and a Node.js backend.
+A modernized web version (coming soon) of **Blokus**, featuring a React + Socket.IO frontent and a Node.js backend.
 Built for real-time, two-player gameplay...place, rotate, and flip pieces, competing for space!
 ```
 [GAME RULES](./GAME_RULES)
