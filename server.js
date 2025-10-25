@@ -1,14 +1,14 @@
-// ---------------------------
-// 🧩 BLOKUS SERVER (Refactored)
-// ---------------------------
+
+// BLOKUS SERVER
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const server = http.createServer(app);
 
-// ✅ Allow React frontend (Vite: http://localhost:5173)
+// Allow React frontend (Vite: http://localhost:5173)
 const io = new Server(server, {
   cors: {
     origin: ["http://localhost:5173"], 
@@ -20,9 +20,8 @@ const PORT = 3001;
 app.get('/', (_, res) => res.send('✅ Blokus server is running!'));
 server.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
 
-// --------------------------------------
-// 🗺️ GAME STATE AND CONSTANTS
-// --------------------------------------
+
+
 const games = {};
 const BOARD_SIZE = 14;
 
@@ -56,9 +55,7 @@ const allPieces = [
   [[0,0],[1,0],[1,1],[2,1],[3,1]]
 ];
 
-// --------------------------------------
-// 🔧 UTILITY FUNCTIONS
-// --------------------------------------
+// Utiliy functions
 function transformPiece(piece, rotation, flipMode) {
   let newPiece = piece.map(([x, y]) => [x, y]);
 
@@ -79,9 +76,7 @@ function playerIndexFor(player, game) {
   return game.players.findIndex(p => p.id === player.id);
 }
 
-// --------------------------------------
-// 🧮 GAME LOGIC HELPERS
-// --------------------------------------
+// Game end logic
 function endGame(roomId) {
   const game = games[roomId];
   if (!game) return;
@@ -180,70 +175,100 @@ function hasValidMove(player, game) {
   return false;
 }
 
-// --------------------------------------
-// ⚡ SOCKET.IO EVENT HANDLERS
-// --------------------------------------
+// Socket.io connection handling
 io.on('connection', (socket) => {
   console.log(`🟢 User connected: ${socket.id}`);
 
   socket.on('disconnect', () => console.log(`🔴 Disconnected: ${socket.id}`));
+  socket.on('createRoom', (name, ack) => {
+    try {
+      if (!name) return ack?.({ ok:false, error:'Name required' });
 
-  // 🧩 Joining or creating a room
-  socket.on('joinRoom', ({ roomId, name }) => {
-    const room = io.sockets.adapter.rooms.get(roomId) || new Set();
+      const roomId = uuidv4().slice(0, 6);
+      const board = Array.from({ length: 14 }, () => Array(14).fill(null));
 
-    if (room.size >= 2) {
-      socket.emit('roomFull', 'This room is already full.');
-      return;
-    }
-
-    socket.join(roomId);
-    console.log(`✅ ${name} joined room ${roomId}`);
-
-    if (!games[roomId]) {
       games[roomId] = {
-        board: Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null)),
-        players: [{ id: socket.id, name, color: "blue", usedPieces: [] }],
-        currentTurn: socket.id
+        board,
+        players: [{ id: socket.id, name, color: 'blue', usedPieces: [] }],
+        currentTurn: socket.id,
+        lastMove: []
       };
-    } else {
-      const game = games[roomId];
-      const existing = game.players.find(p => p.name === name);
 
-      if (existing) {
-        // Reconnection
-        const oldId = existing.id;
-        existing.id = socket.id;
-        if (game.currentTurn === oldId) game.currentTurn = socket.id;
+      socket.join(roomId);
+      console.log(`✅ Room ${roomId} created by ${name}`);
+      ack?.({ ok:true, roomId });
 
-        socket.emit("updateBoard", { board: game.board, lastMove: game.lastMove || [] });
-        socket.emit("updateUsedPieces", existing.usedPieces);
-        if (game.currentTurn === socket.id) socket.emit("yourTurn");
-        else socket.emit("waitTurn");
-      } else {
-        game.players.push({ id: socket.id, name, color: "orange", usedPieces: [] });
-      }
+      syncGameState(roomId);
 
-      if (game.players.length === 2) {
-        const [p1, p2] = game.players;
+      // Send initial state to creator so UI shows immediately
+      const room = games[roomId];
+      const colorMap = { [name]: 'blue' };
 
-        const colorMap = { [p1.name]: p1.color, [p2.name]: p2.color };
-        io.to(roomId).emit("playerColors", colorMap);
-        io.to(roomId).emit("playerList", [
-          { name: p1.name, color: p1.color },
-          { name: p2.name, color: p2.color }
-        ]);
+      io.to(roomId).emit('playerColors', colorMap);
+      io.to(roomId).emit('playerList', room.players.map(p => ({ name: p.name, color: p.color })));
+      io.to(roomId).emit('updateBoard', { board: room.board, lastMove: room.lastMove });
 
-        io.to(game.currentTurn).emit("yourTurn");
-        const other = game.players.find(p => p.id !== game.currentTurn);
-        io.to(other.id).emit("waitTurn");
-
-        console.log(`🎮 Game started in room ${roomId} between ${p1.name} & ${p2.name}`);
-      }
+      // Creator starts (joiner will get 'waitTurn' when they join)
+      io.to(room.currentTurn).emit('yourTurn');
+    } catch (e) {
+      console.error(e);
+      ack?.({ ok:false, error:'Server error creating room' });
     }
   });
 
-  // 🎯 Placing a move
+  function syncGameState(roomId) {
+    const game = games[roomId];
+    if (!game) return;
+
+    // send the full state to both players
+    const colorMap = {};
+    game.players.forEach(p => (colorMap[p.name] = p.color));
+
+    io.to(roomId).emit("playerColors", colorMap);
+    io.to(roomId).emit("playerList", game.players.map(p => ({ name: p.name, color: p.color })));
+    io.to(roomId).emit("updateBoard", { board: game.board, lastMove: game.lastMove });
+    console.log('📤 Emitting playerList:', game.players.map(p => p.name));
+    // turn indicators
+    const currentTurnPlayer = game.players.find(p => p.id === game.currentTurn);
+    const waitingPlayer = game.players.find(p => p.id !== game.currentTurn);
+
+    if (currentTurnPlayer) io.to(currentTurnPlayer.id).emit("yourTurn");
+    if (waitingPlayer) io.to(waitingPlayer.id).emit("waitTurn");
+  }
+
+  // Joining or creating a room
+  socket.on('joinRoom', ({ roomId, name }, ack) => {
+    try {
+      const room = games[roomId];
+      if (!room) return ack?.({ ok:false, error:'Room not found' });
+      if (!name) return ack?.({ ok:false, error:'Name required' });
+
+      // Try to find existing by name OR socket id
+      let existing = room.players.find(p => p.name === name) || room.players.find(p => p.id === socket.id);
+
+      if (existing) {
+        // Reconnect/update socket id
+        existing.id = socket.id;
+        console.log(`♻️ ${name} reconnected to ${roomId}`);
+      } else {
+        if (room.players.length >= 2) return ack?.({ ok:false, error:'Room full' });
+        const newColor = room.players.some(p => p.color === 'blue') ? 'orange' : 'blue';
+        room.players.push({ id: socket.id, name, color: newColor, usedPieces: [] });
+        console.log(`👤 ${name} joined ${roomId}`);
+      }
+
+      socket.join(roomId);
+      ack?.({ ok:true });
+
+      // keep your syncGameState(roomId) call here
+      syncGameState(roomId);
+    } catch (e) {
+      console.error(e);
+      ack?.({ ok:false, error:'Server error joining room' });
+    }
+  });
+
+  // Placing a move
   socket.on("placeMove", ({ row, col, roomId, pieceIndex, rotation = 0, flipMode = "none" }) => {
     const game = games[roomId];
     if (!game) return;
@@ -254,7 +279,7 @@ io.on('connection', (socket) => {
     const colIndex = col - 1;
     const selectedPiece = transformPiece(allPieces[pieceIndex], rotation, flipMode);
 
-    // ✅ Validate move
+    // Validate move
     if (!isValidPlacement(game, player, selectedPiece, rowIndex, colIndex)) {
       socket.emit("invalidMove", "❌ Invalid move. Check placement rules.");
       return;
@@ -265,7 +290,7 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // ✅ Apply move
+    // Apply move
     const placedCells = [];
     for (const [dx, dy] of selectedPiece) {
       game.board[rowIndex + dx][colIndex + dy] = player.name;
@@ -278,10 +303,10 @@ io.on('connection', (socket) => {
     const opponent = game.players.find(p => p.id !== socket.id);
     if (opponent) io.to(opponent.id).emit("opponentUsedPieces", player.usedPieces);
 
-    // 🧩 Broadcast updated board
+    // Broadcast updated board
     io.to(roomId).emit("updateBoard", { board: game.board, lastMove: game.lastMove });
 
-    // 🔄 Turn management
+    // Turn management
     const otherPlayer = game.players.find(p => p.id !== socket.id);
     if (!otherPlayer) return;
 

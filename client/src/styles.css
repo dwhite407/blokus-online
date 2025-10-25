@@ -74,3 +74,11 @@ body { margin: 0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto
 #confirmationControls .confirm, #confirmationControls .cancel { border:none; padding:6px 8px; border-radius: 8px; font-weight:800; cursor:pointer; }
 #confirmationControls .confirm { background: var(--good); color:#05261a; }
 #confirmationControls .cancel { background: var(--bad); color:#2a0f0f; }
+
+.home-container { display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#121212; color:white; text-align:center; }
+.home-input { margin-top:20px; padding:10px; font-size:1rem; border-radius:8px; border:none; outline:none; width:250px; text-align:center; }
+.home-button { margin-top:25px; padding:12px 30px; background:#007bff; color:white; border:none; border-radius:10px; font-size:1.1rem; cursor:pointer; transition:background 0.2s ease; }
+.home-button:hover { background:#0056b3; }
+.home-note { margin-top:40px; font-size:0.9rem; color:#aaa; }
+
+.rules-btn { margin-top:10px; padding:6px 14px; background:#333; color:white; border:none; border-radius:8px; cursor:pointer; transition:background .2s ease; } .rules-btn:hover { background:#555; } .rules-modal-overlay { position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; z-index:999; } .rules-modal { background:#1e1e1e; color:white; padding:25px 35px; border-radius:12px; max-width:400px; text-align:left; box-shadow:0 0 20px rgba(0,0,0,0.5); } .rules-modal h2 { margin-top:0; text-align:center; } .rules-modal ul { margin:15px 0; padding-left:20px; line-height:1.6; } .close-rules { margin-top:15px; background:#007bff; border:none; color:white; border-radius:6px; padding:8px 16px; cursor:pointer; transition:background .2s ease; display:block; width:100%; } .close-rules:hover { background:#0056b3; }

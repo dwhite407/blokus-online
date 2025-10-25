@@ -7,12 +7,19 @@ import SelectedPreview from './components/SelectedPreview'
 import ConfirmationOverlay from './components/ConfirmationOverlay'
 import { allPieces } from './lib/pieces'
 import { transformPiece, normalizePiece } from './lib/transform'
+import { useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom' 
 
 const BOARD_SIZE = 14
-const DEFAULT_ROOM = 'room123'
-const playerCorners = {0: [4,4], 1: [9,9]}
+const playerCorners = { 0: [4, 4], 1: [9, 9] }
 
 export default function App() {
+  const [params] = useSearchParams()
+  const roomFromUrl = params.get('room')
+  const nameFromUrl = params.get('name')
+  const roomId = roomFromUrl || null // fallback keeps quick-play working
+
+  const alreadyJoined = sessionStorage.getItem('alreadyJoined') === '1'
   const [name, setName] = useState('')
   const [players, setPlayers] = useState([])
   const [playerColors, setPlayerColors] = useState({})
@@ -20,7 +27,7 @@ export default function App() {
 
   const [board, setBoard] = useState(Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null)))
   const [lastMove, setLastMove] = useState([])
-  const [usedPieces, setUsedPieces] = useState([])             // mine
+  const [usedPieces, setUsedPieces] = useState([]) // mine
   const [opponentUsedPieces, setOpponentUsedPieces] = useState([])
 
   const [myTurn, setMyTurn] = useState(false)
@@ -35,40 +42,55 @@ export default function App() {
   const [overlayPos, setOverlayPos] = useState(null) // {left, top} for ✅❌
   const boardRef = useRef(null)
   const lastHoveredCellRef = useRef(null)
+  const joinedRef = useRef(false) // ensure we only join once per socket connection
 
   const myColor = playerColors[name] || 'gray'
   const oppColor = playerColors[opponentName] || 'gray'
 
-  // ask name once
+  const [showRules, setShowRules] = useState(false)
+
+  const  navigate = useNavigate()
+
+  if (!roomId) {
+    return (
+      <div className="card" style={{ margin:'40px auto', padding:16, maxWidth:420, textAlign:'center' }}>
+        <h3>No room selected</h3>
+        <p>Go back to the home page to create or join a room.</p>
+        <button className="btn" onClick={() => navigate('/')}>← Home</button>
+      </div>
+    )
+  }
+  // ask name once (prefer URL -> localStorage -> random)
   useEffect(() => {
-    const n = window.prompt('Enter your name') || `Player-${Math.floor(Math.random()*1000)}`
-    setName(n)
-  }, [])
+    const saved = nameFromUrl || localStorage.getItem('playerName') || `Player-${Math.floor(Math.random() * 1000)}`
+    setName(saved)
+  }, [nameFromUrl])
 
   // socket lifecycle
   useEffect(() => {
-    if (!name) return
-    if (socket.connected) return
+    if (!name || !roomId) return
+
+    // always attach listeners; connect if not connected
     if (!socket.connected) socket.connect()
-    let hasJoined = false
-    socket.on('connect', () => {
-      if (!hasJoined) {
-        console.log('✅ Connected, joining room as', name)
-        socket.emit('joinRoom', { roomId: DEFAULT_ROOM, name })
-        hasJoined = true
+
+    const onConnect = () => {
+      if (!joinedRef.current && !alreadyJoined) {
+        console.log('✅ Connected, joining room as', name, '->', roomId)
+        socket.emit('joinRoom', { roomId, name })
+        joinedRef.current = true
       }
-    })
-    
-    socket.io.on('reconnect', () => {
-      console.log('🔄 Reconnected! Rejoining room...');
-      socket.emit('joinRoom', { roomId: DEFAULT_ROOM, name });
-    });
+    }
+
+    // First connect + reconnections both re-emit join
+    socket.on('connect', onConnect)
+    socket.io.on('reconnect', onConnect)
 
     // BOARD + TURNS
-    socket.on('updateBoard', ({ board, lastMove }) => {
+    const onUpdateBoard = ({ board, lastMove }) => {
       setBoard(board)
       setLastMove(lastMove)
-    })
+    }
+    socket.on('updateBoard', onUpdateBoard)
     socket.on('yourTurn', () => setMyTurn(true))
     socket.on('waitTurn', () => setMyTurn(false))
 
@@ -77,22 +99,26 @@ export default function App() {
     socket.on('opponentUsedPieces', used => setOpponentUsedPieces(used))
 
     // PLAYERS
+    socket.on('playerColors', (colors) => setPlayerColors(colors))
     socket.on('playerList', (players) => {
+      console.log('Player list update:', players)
       setPlayers(players)
       const idx = players.findIndex(p => p.name === name)
       setMyPlayerIndex(idx >= 0 ? idx : 0)
       const opp = players.find(p => p.name !== name)
       setOpponentName(opp?.name || null)
     })
-    socket.on('playerColors', (colors) => setPlayerColors(colors))
 
     socket.on('gameOver', (scores) => {
       const msg = scores.map(s => `${s.name}: ${s.score} points`).join('\n')
       alert('Game Over!\n' + msg)
     })
 
+    // cleanup
     return () => {
-      socket.off('updateBoard')
+      socket.off('connect', onConnect)
+      socket.io.off('reconnect', onConnect)
+      socket.off('updateBoard', onUpdateBoard)
       socket.off('yourTurn')
       socket.off('waitTurn')
       socket.off('updateUsedPieces')
@@ -101,9 +127,11 @@ export default function App() {
       socket.off('playerColors')
       socket.off('gameOver')
     }
-  }, [name])
-
-  // keyboard shortcuts (Q/E/Z/X/C) exactly like your HTML
+  }, [name, roomId, alreadyJoined])
+  useEffect(() => {
+    if (alreadyJoined) sessionStorage.removeItem('alreadyJoined')
+  }, [alreadyJoined])
+  // keyboard shortcuts (Q/E/Z/X/C)
   useEffect(() => {
     const onKey = (e) => {
       if (!myTurn || usedPieces.includes(selectedPieceIndex)) return
@@ -131,8 +159,6 @@ export default function App() {
   const onCellClick = (r, c, el) => {
     if (!myTurn || usedPieces.includes(selectedPieceIndex)) return
     setPendingPlacement({ baseRow: r, baseCol: c })
-
-    // place overlay above clicked cell (like your absolute confirmationControls)
     const rect = el.getBoundingClientRect()
     setOverlayPos({ left: rect.left + window.scrollX, top: rect.top + window.scrollY - 60 })
   }
@@ -141,7 +167,7 @@ export default function App() {
     if (!pendingPlacement) return
     const { baseRow, baseCol } = pendingPlacement
 
-    // first-move corner check (client-side, same as your HTML)
+    // first-move corner check (client-side convenience; server still enforces)
     if (usedPieces.length === 0) {
       const [cornerRow, cornerCol] = playerCorners[myPlayerIndex]
       const touchesCorner = transformPiece(allPieces[selectedPieceIndex], rotation, flipMode)
@@ -155,7 +181,7 @@ export default function App() {
     socket.emit('placeMove', {
       row: baseRow + 1,
       col: baseCol + 1,
-      roomId: DEFAULT_ROOM,
+      roomId, // ✅ use the actual roomId
       pieceIndex: selectedPieceIndex,
       rotation,
       flipMode
@@ -183,6 +209,8 @@ export default function App() {
           ))}
         </ul>
       </div>
+
+      <button className="rules-btn" onClick={() => setShowRules(true)}>📜 Rules</button>
 
       <Controls
         onRotateLeft={() => setRotation(r => (r + 1) % 4)}
@@ -238,6 +266,22 @@ export default function App() {
         onCellClick={onCellClick}
         startCorners={Object.values(playerCorners)}
       />
+
+      {showRules && (
+        <div className="rules-modal-overlay" onClick={() => setShowRules(false)}>
+          <div className="rules-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>📜 Blokus Rules</h2>
+            <ul>
+              <li>Each player places one piece per turn.</li>
+              <li>Pieces of the same color must touch only at the corners, never edges.</li>
+              <li>Your first piece must cover your starting square.</li>
+              <li>You cannot overlap or go outside the board.</li>
+              <li>The game ends when no player can move; lowest unused squares win.</li>
+            </ul>
+            <button onClick={() => setShowRules(false)} className="close-rules">Close</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
